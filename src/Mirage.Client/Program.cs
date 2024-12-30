@@ -1,11 +1,20 @@
+using Mirage.Modules;
+
 namespace Mirage;
 
 internal static class Program
 {
-	[STAThread]
+    [STAThread]
     public static void Main()
     {
         ApplicationConfiguration.Initialize();
-        Application.Run(new frmMainMenu());
+
+        My.Forms.frmSendGetData.Show();
+        modGameLogic.SetStatus("Initializing TCP settings...");
+        modClientTCP.TcpInit();
+        My.Forms.frmMainMenu.Show();
+        My.Forms.frmSendGetData.Hide();
+
+        Application.Run(My.Forms.frmMainMenu);
     }
 }

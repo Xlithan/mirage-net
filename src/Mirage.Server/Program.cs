@@ -1,3 +1,5 @@
+using Mirage.Forms;
+
 namespace Mirage;
 
 internal static class Program

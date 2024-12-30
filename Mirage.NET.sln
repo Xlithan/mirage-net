@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mirage.Client", "src\Mirage
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mirage.Server", "src\Mirage.Server\Mirage.Server.csproj", "{0F0899F4-91EA-4EC0-A78E-1570D2D03DC9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mirage.Compat", "src\Mirage.Compat\Mirage.Compat.csproj", "{5920BF94-EAB8-4BEF-94A8-7E5572FED0AA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,6 +16,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{C011609A-4638-4F6C-9348-FBFA787D1535} = {D9C5A85C-0CC4-41EA-83F8-4168DE9B01D6}
 		{0F0899F4-91EA-4EC0-A78E-1570D2D03DC9} = {D9C5A85C-0CC4-41EA-83F8-4168DE9B01D6}
+		{5920BF94-EAB8-4BEF-94A8-7E5572FED0AA} = {D9C5A85C-0CC4-41EA-83F8-4168DE9B01D6}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{C011609A-4638-4F6C-9348-FBFA787D1535}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -24,5 +27,9 @@ Global
 		{0F0899F4-91EA-4EC0-A78E-1570D2D03DC9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0F0899F4-91EA-4EC0-A78E-1570D2D03DC9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0F0899F4-91EA-4EC0-A78E-1570D2D03DC9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5920BF94-EAB8-4BEF-94A8-7E5572FED0AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5920BF94-EAB8-4BEF-94A8-7E5572FED0AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5920BF94-EAB8-4BEF-94A8-7E5572FED0AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5920BF94-EAB8-4BEF-94A8-7E5572FED0AA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
