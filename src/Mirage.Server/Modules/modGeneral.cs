@@ -70,8 +70,6 @@ public static partial class modGeneral
         modTypes.ClearSpells();
         SetStatus("Loading classes...");
         modDatabase.LoadClasses();
-        //SetStatus("Loading old maps...");
-        //modDatabase.LoadOldMaps();
         SetStatus("Loading maps...");
         modDatabase.LoadMaps();
         SetStatus("Loading items...");
