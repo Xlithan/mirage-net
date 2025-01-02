@@ -1432,6 +1432,18 @@ public static class modGameLogic
             modTypes.SEP_CHAR);
     }
 
+    private static (int mapNum, int x, int y) GetTargetMap(int currentMapNum, int dir, int x, int y)
+    {
+        return dir switch
+        {
+            modTypes.DIR_UP => (modTypes.Map[currentMapNum].Up, x, modTypes.MAX_MAPY),
+            modTypes.DIR_DOWN => (modTypes.Map[currentMapNum].Down, x, 0),
+            modTypes.DIR_LEFT => (modTypes.Map[currentMapNum].Left, modTypes.MAX_MAPX, y),
+            modTypes.DIR_RIGHT => (modTypes.Map[currentMapNum].Right, 0, y),
+            _ => (0, x, y)
+        };
+    }
+
     private static bool TryPlayerMove(int index, int x, int y, int movement)
     {
         var mapNum = modTypes.GetPlayerMap(index);
@@ -1463,13 +1475,17 @@ public static class modGameLogic
         }
 
         // Check to see if we can move them to the another map
-        var targetMapNum = modTypes.Map[mapNum].Up;
-        if (targetMapNum <= 0)
+        var (targetMapNum, targetX, targetY) = GetTargetMap(mapNum, 
+            modTypes.GetPlayerDir(index), 
+            modTypes.GetPlayerX(index), 
+            modTypes.GetPlayerY(index));
+
+        if (targetMapNum == 0)
         {
             return false;
         }
 
-        PlayerWarp(index, targetMapNum, modTypes.GetPlayerX(index), modTypes.MAX_MAPY);
+        PlayerWarp(index, targetMapNum, targetX, targetY);
         return true;
     }
 
