@@ -366,7 +366,54 @@ public static class modDatabase
             SaveMap(i);
         }
     }
+    public static void LoadOldMaps()
+    {
+        var path = Path.Combine(Directory.GetCurrentDirectory(), "Data", "vb6maps");
+        for (var i = 1; i <= modTypes.MAX_MAPS; i++)
+        {
+            LoadOldMap(i, path + "\\map" + i + ".dat");
+        }
+    }
+    private static void LoadOldMap(int mapNum, string filename)
+    {
+        using var fileStream = File.OpenRead(filename);
+        using var binaryReader = new BinaryReader(fileStream);
+        var map = new modTypes.MapRec();
+        map.Name = new string(binaryReader.ReadChars(20)).Trim();
+        map.Revision = binaryReader.ReadInt32();
+        map.Moral = binaryReader.ReadByte();
+        map.Up = binaryReader.ReadInt16();
+        map.Down = binaryReader.ReadInt16();
+        map.Left = binaryReader.ReadInt16();
+        map.Right = binaryReader.ReadInt16();
+        map.Music = binaryReader.ReadByte();
+        map.BootMap = binaryReader.ReadInt16();
+        map.BootX = binaryReader.ReadByte();
+        map.BootY = binaryReader.ReadByte();
+        map.Shop = binaryReader.ReadByte();
+        binaryReader.ReadByte();
 
+        for (var y = 0; y <= modTypes.MAX_MAPY; y++)
+        {
+            for (var x = 0; x <= modTypes.MAX_MAPX; x++)
+            {
+                map.Tile[x, y].Ground = binaryReader.ReadInt16();
+                map.Tile[x, y].Mask = binaryReader.ReadInt16();
+                map.Tile[x, y].Anim = binaryReader.ReadInt16();
+                map.Tile[x, y].Fringe = binaryReader.ReadInt16();
+                map.Tile[x, y].Type = binaryReader.ReadByte();
+                map.Tile[x, y].Data1 = binaryReader.ReadInt16();
+                map.Tile[x, y].Data2 = binaryReader.ReadInt16();
+                map.Tile[x, y].Data3 = binaryReader.ReadInt16();
+            }
+        }
+        for (var i = 1; i <= modTypes.MAX_MAP_NPCS; i++)
+        {
+            map.Npc[i] = binaryReader.ReadByte();
+        }
+        modTypes.Map[mapNum] = map;
+        modDatabase.SaveMap(mapNum);
+    }
     public static void LoadMaps()
     {
         var path = Path.Combine("Data", "Maps");
