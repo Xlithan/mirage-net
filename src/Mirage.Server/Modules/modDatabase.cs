@@ -366,6 +366,7 @@ public static class modDatabase
             SaveMap(i);
         }
     }
+
     public static void LoadMaps()
     {
         var path = Path.Combine("Data", "Maps");
