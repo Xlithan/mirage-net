@@ -4,6 +4,7 @@ using SFML.Graphics;
 using SFML.System;
 using Color = SFML.Graphics.Color;
 using Image = System.Drawing.Image;
+using ObjectDisposedException = System.ObjectDisposedException;
 
 namespace Mirage.Modules;
 
@@ -175,14 +176,19 @@ public static partial class modGameLogic
             return;
         }
 
-        My.Forms.frmMainMenu.Show();
-        My.Forms.frmSendGetData.Hide();
-
-        MessageBox.Show(
-            "Sorry, the server seems to be down. Please try to reconnect in a few minutes or visit https://mirageuniverse.com/",
-            modTypes.GAME_NAME,
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information);
+        try
+        {
+            My.Forms.frmMainMenu.Show();
+            My.Forms.frmSendGetData.Hide();
+        }
+        catch (ObjectDisposedException)
+        {
+            MessageBox.Show(
+                "Sorry, the server seems to be down. Please try to reconnect in a few minutes or visit https://mirageuniverse.com/",
+                modTypes.GAME_NAME,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
     }
 
     public static void GameInit()
@@ -436,18 +442,25 @@ public static partial class modGameLogic
         var anim1 = modTypes.Map.Tile[x, y].Mask;
         var anim2 = modTypes.Map.Tile[x, y].Anim;
 
-        if (MapAnim == 0)
+        if (anim2 > 0)
         {
-            if (anim1 > 0 && modTypes.TempTile[x, y].DoorOpen == modTypes.NO)
+            if (MapAnim == 0)
             {
-                BltTile(x, y, anim1);
+                if (anim1 > 0 && modTypes.TempTile[x, y].DoorOpen == modTypes.NO)
+                {
+                    BltTile(x, y, anim1);
+                }
+            }
+            else
+            {
+                BltTile(x, y, anim2);
             }
         }
         else
         {
-            if (anim2 > 0)
+            if (anim1 > 0 && modTypes.TempTile[x, y].DoorOpen == modTypes.NO)
             {
-                BltTile(x, y, anim2);
+                BltTile(x, y, anim1);
             }
         }
     }
@@ -469,7 +482,7 @@ public static partial class modGameLogic
 
     public static void BltFringeTile(int x, int y)
     {
-        var fringe = modTypes.Map.Tile[x, y].Mask;
+        var fringe = modTypes.Map.Tile[x, y].Fringe;
 
         if (fringe > 0)
         {

@@ -846,7 +846,7 @@ public static class modHandleData
             }
 
             // Try to attack a npc
-            for (var i = 0; i <= modTypes.MAX_MAP_NPCS; i++)
+            for (var i = 1; i <= modTypes.MAX_MAP_NPCS; i++)
             {
                 // Can we attack the npc?
                 if (modGameLogic.CanAttackNpc(index, i))

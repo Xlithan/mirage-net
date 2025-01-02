@@ -221,7 +221,7 @@ public static class modTypes
         [Key(10)] public int BootY;
         [Key(11)] public int Shop;
         [Key(12)] public int Indoors;
-        [Key(13)] public readonly TileRec[,] Tile = new TileRec[MAX_MAPX + 1, MAX_MAPY + 1];
+        [Key(13)] public TileRec[,] Tile = new TileRec[MAX_MAPX + 1, MAX_MAPY + 1];
         [Key(14)] public int[] Npc = new int[MAX_MAP_NPCS + 1];
     }
 

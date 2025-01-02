@@ -500,7 +500,7 @@ public static class modGameLogic
 
     public static void PlayerMapGetItem(int index)
     {
-        if (modServerTCP.IsPlaying(index))
+        if (!modServerTCP.IsPlaying(index))
         {
             return;
         }
@@ -872,87 +872,58 @@ public static class modGameLogic
         return false;
     }
 
+    private static (int x, int y) GetAdjacentTile(int x, int y, int dir)
+    {
+        return dir switch
+        {
+            modTypes.DIR_UP => (x, y - 1),
+            modTypes.DIR_DOWN => (x, y + 1),
+            modTypes.DIR_LEFT => (x - 1, y),
+            modTypes.DIR_RIGHT => (x + 1, y),
+            _ => (x, y)
+        };
+    }
+
+
     public static bool CanAttackNpc(int attacker, int mapNpcNum)
     {
-        // Check for subscript out of range
-        if (!modServerTCP.IsPlaying(attacker) || mapNpcNum <= 0 || mapNpcNum > modTypes.MAX_MAP_NPCS)
-        {
-            return false;
-        }
-
-        // Check for subscript out of range
-        if (modTypes.MapNpc[modTypes.GetPlayerMap(attacker), mapNpcNum].Num <= 0)
+        if (!modServerTCP.IsPlaying(attacker))
         {
             return false;
         }
 
         var mapNum = modTypes.GetPlayerMap(attacker);
-        var npcNum = modTypes.MapNpc[mapNum, mapNpcNum].Num;
 
-        // Make sure the npc isn't already dead
-        if (modTypes.MapNpc[mapNum, mapNpcNum].HP <= 0)
+        ref var mapNpc = ref modTypes.MapNpc[mapNum, mapNpcNum];
+        if (mapNpc.Num <= 0 || mapNpc.HP <= 0)
         {
             return false;
         }
 
-        if (npcNum > 0 && modGeneral.GetTickCount() > modTypes.Player[attacker].AttackTimer + 950)
+        ref var npc = ref modTypes.Npc[mapNpc.Num];
+
+        if (modGeneral.GetTickCount() <= modTypes.Player[attacker].AttackTimer + 950)
         {
-            switch (modTypes.GetPlayerDir(attacker))
-            {
-                case modTypes.DIR_UP:
-                    if (modTypes.MapNpc[mapNum, mapNpcNum].Y + 1 == modTypes.GetPlayerX(attacker) && modTypes.MapNpc[mapNum, mapNpcNum].X == modTypes.GetPlayerX(attacker))
-                    {
-                        if (modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_FRIENDLY || modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_SHOPKEEPER)
-                        {
-                            return true;
-                        }
-
-                        modServerTCP.PlayerMsg(attacker, $"You cannot attack a {modTypes.Npc[npcNum].Name.Trim()}!", modText.BrightBlue);
-                    }
-
-                    break;
-
-                case modTypes.DIR_DOWN:
-                    if (modTypes.MapNpc[mapNum, mapNpcNum].Y - 1 == modTypes.GetPlayerX(attacker) && modTypes.MapNpc[mapNum, mapNpcNum].X == modTypes.GetPlayerX(attacker))
-                    {
-                        if (modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_FRIENDLY || modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_SHOPKEEPER)
-                        {
-                            return true;
-                        }
-
-                        modServerTCP.PlayerMsg(attacker, $"You cannot attack a {modTypes.Npc[npcNum].Name.Trim()}!", modText.BrightBlue);
-                    }
-
-                    break;
-
-                case modTypes.DIR_LEFT:
-                    if (modTypes.MapNpc[mapNum, mapNpcNum].Y == modTypes.GetPlayerX(attacker) && modTypes.MapNpc[mapNum, mapNpcNum].X + 1 == modTypes.GetPlayerX(attacker))
-                    {
-                        if (modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_FRIENDLY || modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_SHOPKEEPER)
-                        {
-                            return true;
-                        }
-
-                        modServerTCP.PlayerMsg(attacker, $"You cannot attack a {modTypes.Npc[npcNum].Name.Trim()}!", modText.BrightBlue);
-                    }
-
-                    break;
-
-                case modTypes.DIR_RIGHT:
-                    if (modTypes.MapNpc[mapNum, mapNpcNum].Y == modTypes.GetPlayerX(attacker) && modTypes.MapNpc[mapNum, mapNpcNum].X - 1 == modTypes.GetPlayerX(attacker))
-                    {
-                        if (modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_FRIENDLY || modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_SHOPKEEPER)
-                        {
-                            return true;
-                        }
-
-                        modServerTCP.PlayerMsg(attacker, $"You cannot attack a {modTypes.Npc[npcNum].Name.Trim()}!", modText.BrightBlue);
-                    }
-
-                    break;
-            }
+            return false;
         }
 
+        var (dx, dy) = GetAdjacentTile(
+            modTypes.GetPlayerX(attacker),
+            modTypes.GetPlayerY(attacker),
+            modTypes.GetPlayerDir(attacker));
+
+        if (dx != mapNpc.X || dy != mapNpc.Y)
+        {
+            return false;
+        }
+
+        if (npc.Behavior != modTypes.NPC_BEHAVIOR_FRIENDLY &&
+            npc.Behavior != modTypes.NPC_BEHAVIOR_SHOPKEEPER)
+        {
+            return true;
+        }
+
+        modServerTCP.PlayerMsg(attacker, $"You cannot attack a {npc.Name.Trim()}!", modText.BrightBlue);
         return false;
     }
 

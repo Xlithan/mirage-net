@@ -155,469 +155,453 @@ public static partial class modGeneral
         }
     }
 
-    public static void GameAI()
+    private static void CloseDoors(int mapNum, int tickCount)
     {
-        int i;
-        
-        //WeatherSeconds = WeatherSeconds + 1
-        //TimeSeconds = TimeSeconds + 1
-
-        // Lets change the weather if its time to
-        if (WeatherSeconds >= 60)
+        if (tickCount <= modTypes.TempTile[mapNum].DoorTimer + 5000)
         {
-            i = Random.Shared.Next(3);
-            if (i != GameWeather)
-            {
-                GameWeather = i;
-                modServerTCP.SendWeatherToAll();
-            }
-
-            WeatherSeconds = 0;
+            return;
         }
 
-        // Check if we need to switch from day to night or night to day
-        if (TimeSeconds >= 60)
+        for (var y = 0; y <= modTypes.MAX_MAPY; y++)
         {
-            if (GameTime == modTypes.TIME_DAY)
+            for (var x = 0; x <= modTypes.MAX_MAPX; x++)
             {
-                GameTime = modTypes.TIME_NIGHT;
+                if (modTypes.TempTile[mapNum].DoorOpen[x, y] == modTypes.NO)
+                {
+                    continue;
+                }
+
+                modTypes.TempTile[mapNum].DoorOpen[x, y] = modTypes.NO;
+
+                modServerTCP.SendDataToMap(mapNum,
+                    "MAPKEY" +
+                    modTypes.SEP_CHAR + x +
+                    modTypes.SEP_CHAR + y +
+                    modTypes.SEP_CHAR + 0 +
+                    modTypes.SEP_CHAR);
+            }
+        }
+    }
+
+    private static void UpdateNpc(int mapNum, int mapNpcNum, int tickCount)
+    {
+        var npcNum = modTypes.Map[mapNum].Npc[mapNpcNum];
+        if (npcNum == 0)
+        {
+            return;
+        }
+
+        ref var npc = ref modTypes.Npc[npcNum];
+        ref var mapNpc = ref modTypes.MapNpc[mapNum, mapNpcNum];
+
+        //////////////////////////////////////
+        // This is used for spawning an NPC //
+        //////////////////////////////////////
+
+        // Check if we are supposed to spawn an npc or not
+        if (mapNpc.Num == 0)
+        {
+            if (tickCount > mapNpc.SpawnWait + npc.SpawnSecs * 1000)
+            {
+                modGameLogic.SpawnNpc(mapNpcNum, mapNum);
+            }
+
+            return;
+        }
+
+        /////////////////////////////////////////
+        // This is used for ATTACKING ON SIGHT //
+        /////////////////////////////////////////
+
+        // If the npc is a attack on sight, search for a player on the map
+        if (mapNpc.Target == 0 && npc.Behavior is modTypes.NPC_BEHAVIOR_ATTACKONSIGHT or modTypes.NPC_BEHAVIOR_GUARD)
+        {
+            for (var playerNum = 1; playerNum <= modTypes.MAX_PLAYERS; playerNum++)
+            {
+                if (!modServerTCP.IsPlaying(playerNum))
+                {
+                    continue;
+                }
+
+                if (modTypes.GetPlayerMap(playerNum) != mapNum ||
+                    modTypes.GetPlayerAccess(playerNum) > modTypes.ADMIN_MONITER)
+                {
+                    continue;
+                }
+
+                var range = npc.Range;
+
+                var distanceX = mapNpc.X - modTypes.GetPlayerX(playerNum);
+                var distanceY = mapNpc.Y - modTypes.GetPlayerY(playerNum);
+
+                // Make sure we get a positive value
+                if (distanceX < 0) distanceX *= -1;
+                if (distanceY < 0) distanceY *= -1;
+
+                // Are they in range?  if so GET'M!
+                if (distanceX > range || distanceY > range)
+                {
+                    continue;
+                }
+
+                if (npc.Behavior != modTypes.NPC_BEHAVIOR_ATTACKONSIGHT && modTypes.GetPlayerPK(playerNum) == modTypes.NO)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(npc.AttackSay))
+                {
+                    modServerTCP.PlayerMsg(playerNum, $"{npc.Name.Trim()} says, '{npc.AttackSay.Trim()}' to you.", modText.SayColor);
+                }
+
+                mapNpc.Target = playerNum;
+            }
+        }
+
+        // /////////////////////////////////////////////
+        // // This is used for NPC walking/targetting //
+        // /////////////////////////////////////////////
+
+        // Check to see if its time for the npc to walk
+        if (npc.Behavior != modTypes.NPC_BEHAVIOR_SHOPKEEPER)
+        {
+            // Check to see if we are following a player or not
+            if (mapNpc.Target == 0)
+            {
+                var i = Random.Shared.Next(4);
+                if (i == 1)
+                {
+                    var dir = Random.Shared.Next(4);
+                    if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, dir))
+                    {
+                        modGameLogic.NpcMove(mapNum, mapNpcNum, dir, modTypes.MOVING_WALKING);
+                    }
+                }
             }
             else
             {
-                GameTime = modTypes.TIME_DAY;
-            }
+                var target = mapNpc.Target;
+                
+                // Check if the player is even playing, if so follow'm
+                if (modServerTCP.IsPlaying(target) && modTypes.GetPlayerMap(target) == mapNum)
+                {
+                    var didWalk = false;
+                    
+                    var playerNum = Random.Shared.Next(5);
+                    switch (playerNum)
+                    {
+                        case 0:
+                            // Up
+                            if (mapNpc.Y > modTypes.GetPlayerY(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_UP))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_UP, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
 
-            modServerTCP.SendTimeToAll();
-            TimeSeconds = 0;
+                            // Down
+                            if (mapNpc.Y < modTypes.GetPlayerY(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_DOWN))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_DOWN, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Left
+                            if (mapNpc.X > modTypes.GetPlayerX(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_LEFT))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_LEFT, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Right
+                            if (mapNpc.X < modTypes.GetPlayerX(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_RIGHT))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_RIGHT, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            break;
+
+                        case 1:
+                            // Right
+                            if (mapNpc.X < modTypes.GetPlayerX(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_RIGHT))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_RIGHT, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Left
+                            if (mapNpc.X > modTypes.GetPlayerX(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_LEFT))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_LEFT, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Down
+                            if (mapNpc.Y < modTypes.GetPlayerY(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_DOWN))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_DOWN, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Up
+                            if (mapNpc.Y > modTypes.GetPlayerY(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_UP))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_UP, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            break;
+
+                        case 2:
+                            // Down
+                            if (mapNpc.Y < modTypes.GetPlayerY(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_DOWN))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_DOWN, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Up
+                            if (mapNpc.Y > modTypes.GetPlayerY(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_UP))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_UP, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Right
+                            if (mapNpc.X < modTypes.GetPlayerX(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_RIGHT))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_RIGHT, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Left
+                            if (mapNpc.X > modTypes.GetPlayerX(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_LEFT))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_LEFT, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            break;
+
+                        case 3:
+                            // Left
+                            if (mapNpc.X > modTypes.GetPlayerX(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_LEFT))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_LEFT, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Right
+                            if (mapNpc.X < modTypes.GetPlayerX(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_RIGHT))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_RIGHT, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Down
+                            if (mapNpc.Y < modTypes.GetPlayerY(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_DOWN))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_DOWN, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            // Up
+                            if (mapNpc.Y > modTypes.GetPlayerY(target) && !didWalk)
+                            {
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, modTypes.DIR_UP))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, modTypes.DIR_UP, modTypes.MOVING_WALKING);
+                                    didWalk = true;
+                                }
+                            }
+
+                            break;
+                    }
+
+                    // Check if we can't move and if player is behind something and if we can just switch dirs
+                    if (!didWalk)
+                    {
+                        if (mapNpc.X - 1 == modTypes.GetPlayerX(target) && mapNpc.Y == modTypes.GetPlayerY(target))
+                        {
+                            if (mapNpc.Dir != modTypes.DIR_LEFT)
+                            {
+                                modGameLogic.NpcDir(mapNum, mapNpcNum, modTypes.DIR_LEFT);
+                            }
+
+                            didWalk = true;
+                        }
+
+                        if (mapNpc.X + 1 == modTypes.GetPlayerX(target) && mapNpc.Y == modTypes.GetPlayerY(target))
+                        {
+                            if (mapNpc.Dir != modTypes.DIR_RIGHT)
+                            {
+                                modGameLogic.NpcDir(mapNum, mapNpcNum, modTypes.DIR_RIGHT);
+                            }
+
+                            didWalk = true;
+                        }
+
+                        if (mapNpc.X == modTypes.GetPlayerX(target) && mapNpc.Y - 1 == modTypes.GetPlayerY(target))
+                        {
+                            if (mapNpc.Dir != modTypes.DIR_UP)
+                            {
+                                modGameLogic.NpcDir(mapNum, mapNpcNum, modTypes.DIR_UP);
+                            }
+
+                            didWalk = true;
+                        }
+
+                        if (mapNpc.X == modTypes.GetPlayerX(target) && mapNpc.Y + 1 == modTypes.GetPlayerY(target))
+                        {
+                            if (mapNpc.Dir != modTypes.DIR_DOWN)
+                            {
+                                modGameLogic.NpcDir(mapNum, mapNpcNum, modTypes.DIR_DOWN);
+                            }
+
+                            didWalk = true;
+                        }
+
+                        // We could not move so player must be behind something, walk randomly.
+                        if (!didWalk)
+                        {
+                            var i = Random.Shared.Next(2);
+                            if (i == 1)
+                            {
+                                var dir = Random.Shared.Next(4);
+                                if (modGameLogic.CanNpcMove(mapNum, mapNpcNum, i))
+                                {
+                                    modGameLogic.NpcMove(mapNum, mapNpcNum, dir, modTypes.MOVING_WALKING);
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    mapNpc.Target = 0;
+                }
+            }
         }
 
-        for (var y = 1; y <= modTypes.MAX_MAPS; y++)
+        // /////////////////////////////////////////////
+        // // This is used for npcs to attack players //
+        // /////////////////////////////////////////////
+        
+        // Check if the npc can attack the targeted player player
+        if (mapNpc.Target > 0)
         {
-            if (modTypes.PlayersOnMap[y] != 0)
+            var target = mapNpc.Target;
+            
+            // Is the target playing and on the same map?
+            if (modServerTCP.IsPlaying(target) && modTypes.GetPlayerMap(target) == mapNum)
             {
-                var tickCount = GetTickCount();
-
-                ////////////////////////////////////
-                // This is used for closing doors //
-                ////////////////////////////////////
-                if (tickCount > modTypes.TempTile[y].DoorTimer + 5000)
+                // Can the npc attack the player?
+                if (modGameLogic.CanNpcAttackPlayer(mapNpcNum, target))
                 {
-                    for (var y1 = 0; y1 <= modTypes.MAX_MAPY; y1++)
+                    if (!modGameLogic.CanPlayerBlockHit(target))
                     {
-                        for (var x1 = 0; x1 <= modTypes.MAX_MAPX; x1++)
+                        var damage = npc.STR - modGameLogic.GetPlayerProtection(target);
+                        if (damage > 0)
                         {
-                            if (modTypes.TempTile[y].DoorOpen[x1, y1] == modTypes.YES)
-                            {
-                                modTypes.TempTile[y].DoorOpen[x1, y1] = modTypes.NO;
-                                modServerTCP.SendDataToMap(y,
-                                    "MAPKEY" +
-                                    modTypes.SEP_CHAR + x1 +
-                                    modTypes.SEP_CHAR + y1 +
-                                    modTypes.SEP_CHAR + 0 +
-                                    modTypes.SEP_CHAR);
-                            }
+                            modGameLogic.NpcAttackPlayer(mapNpcNum, target, damage);
                         }
+                        else
+                        {
+                            modServerTCP.PlayerMsg(target, $"The {npc.Name.Trim()}'s hit didn't even phase you!", modText.BrightBlue);
+                        }
+                    }
+                    else
+                    {
+                        modServerTCP.PlayerMsg(target, $"Your {modTypes.Item[modTypes.GetPlayerInvItemNum(target, modTypes.GetPlayerShieldSlot(target))].Name.Trim()} blocks the {modTypes.Npc[npcNum].Name.Trim()}'s hit!", modText.BrightCyan);
                     }
                 }
+            }
+            else
+            {
+                // Player left map or game, set target to 0
+                mapNpc.Target = 0;
+            }
+        }
 
-                for (var x = 1; x <= modTypes.MAX_MAP_NPCS; x++)
+        ////////////////////////////////////////////
+        // This is used for regenerating NPC's HP //
+        ////////////////////////////////////////////
+        if (modTypes.MapNpc[mapNpcNum, mapNum].Num > 0 && GetTickCount() > GiveNPCHPTimer + 10000)
+        {
+            if (mapNpc.HP > 0)
+            {
+                mapNpc.HP += modGameLogic.GetNpcHPRegen(npcNum);
+
+                // Check if they have more then they should and if so just set it to max
+                if (mapNpc.HP > modGameLogic.GetNpcMaxHP(npcNum))
                 {
-                    var npcNum = modTypes.MapNpc[x, y].Num;
-
-                    /////////////////////////////////////////
-                    // This is used for ATTACKING ON SIGHT //
-                    /////////////////////////////////////////
-                    // Make sure theres a npc with the map
-                    if (modTypes.Map[y].Npc[x] > 0 && modTypes.MapNpc[y, x].Num > 0)
-                    {
-                        // If the npc is a attack on sight, search for a player on the map
-                        if (modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_ATTACKONSIGHT || modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_GUARD)
-                        {
-                            for (i = 1; i <= modTypes.MAX_PLAYERS; i++)
-                            {
-                                if (!modServerTCP.IsPlaying(i))
-                                {
-                                    continue;
-                                }
-
-                                if (modTypes.GetPlayerMap(i) != y || modTypes.MapNpc[y, x].Target != 0 || modTypes.GetPlayerAccess(i) > modTypes.ADMIN_MONITER)
-                                {
-                                    continue;
-                                }
-
-                                var n = modTypes.Npc[npcNum].Range;
-
-                                var distanceX = modTypes.MapNpc[y, x].X - modTypes.GetPlayerX(i);
-                                var distanceY = modTypes.MapNpc[y, x].Y - modTypes.GetPlayerY(i);
-
-                                // Make sure we get a positive value
-                                if (distanceX < 0) distanceX *= -1;
-                                if (distanceY < 0) distanceY *= -1;
-
-                                // Are they in range?  if so GET'M!
-                                if (distanceX > n || distanceY > n)
-                                {
-                                    continue;
-                                }
-
-                                if (modTypes.Npc[npcNum].Behavior == modTypes.NPC_BEHAVIOR_ATTACKONSIGHT || modTypes.GetPlayerPK(i) == modTypes.YES)
-                                {
-                                    if (!string.IsNullOrWhiteSpace(modTypes.Npc[npcNum].AttackSay))
-                                    {
-                                        modServerTCP.PlayerMsg(i, $"{modTypes.Npc[npcNum].Name.Trim()} says, '{modTypes.Npc[npcNum].AttackSay.Trim()}' to you.", modText.SayColor);
-                                    }
-
-                                    modTypes.MapNpc[y, x].Target = i;
-                                }
-                            }
-                        }
-                    }
-
-                    // /////////////////////////////////////////////
-                    // // This is used for NPC walking/targetting //
-                    // /////////////////////////////////////////////
-                    // Make sure theres a npc with the map
-                    if (modTypes.Map[y].Npc[x] > 0 && modTypes.MapNpc[y, x].Num > 0)
-                    {
-                        var target = modTypes.MapNpc[y, x].Target;
-
-                        // Check to see if its time for the npc to walk
-                        if (modTypes.Npc[npcNum].Behavior != modTypes.NPC_BEHAVIOR_SHOPKEEPER)
-                        {
-                            // Check to see if we are following a player or not
-                            if (target > 0)
-                            {
-                                // Check if the player is even playing, if so follow'm
-                                if (modServerTCP.IsPlaying(target) && modTypes.GetPlayerMap(target) == y)
-                                {
-                                    var didWalk = false;
-
-                                    i = Random.Shared.Next(5);
-                                    switch (i)
-                                    {
-                                        case 0:
-                                            // Up
-                                            if (modTypes.MapNpc[y, x].Y > modTypes.GetPlayerY(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_UP))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_UP, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Down
-                                            if (modTypes.MapNpc[y, x].Y < modTypes.GetPlayerY(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_DOWN))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_DOWN, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Left
-                                            if (modTypes.MapNpc[y, x].X > modTypes.GetPlayerX(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_LEFT))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_LEFT, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Right
-                                            if (modTypes.MapNpc[y, x].X < modTypes.GetPlayerX(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_RIGHT))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_RIGHT, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            break;
-
-                                        case 1:
-                                            // Right
-                                            if (modTypes.MapNpc[y, x].X < modTypes.GetPlayerX(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_RIGHT))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_RIGHT, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Left
-                                            if (modTypes.MapNpc[y, x].X > modTypes.GetPlayerX(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_LEFT))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_LEFT, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Down
-                                            if (modTypes.MapNpc[y, x].Y < modTypes.GetPlayerY(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_DOWN))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_DOWN, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Up
-                                            if (modTypes.MapNpc[y, x].Y > modTypes.GetPlayerY(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_UP))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_UP, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            break;
-
-                                        case 2:
-                                            // Down
-                                            if (modTypes.MapNpc[y, x].Y < modTypes.GetPlayerY(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_DOWN))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_DOWN, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Up
-                                            if (modTypes.MapNpc[y, x].Y > modTypes.GetPlayerY(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_UP))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_UP, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Right
-                                            if (modTypes.MapNpc[y, x].X < modTypes.GetPlayerX(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_RIGHT))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_RIGHT, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Left
-                                            if (modTypes.MapNpc[y, x].X > modTypes.GetPlayerX(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_LEFT))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_LEFT, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            break;
-
-                                        case 3:
-                                            // Left
-                                            if (modTypes.MapNpc[y, x].X > modTypes.GetPlayerX(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_LEFT))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_LEFT, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Right
-                                            if (modTypes.MapNpc[y, x].X < modTypes.GetPlayerX(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_RIGHT))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_RIGHT, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Down
-                                            if (modTypes.MapNpc[y, x].Y < modTypes.GetPlayerY(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_DOWN))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_DOWN, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            // Up
-                                            if (modTypes.MapNpc[y, x].Y > modTypes.GetPlayerY(target) && !didWalk)
-                                            {
-                                                if (modGameLogic.CanNpcMove(y, x, modTypes.DIR_UP))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, modTypes.DIR_UP, modTypes.MOVING_WALKING);
-                                                    didWalk = true;
-                                                }
-                                            }
-
-                                            break;
-                                    }
-
-                                    // Check if we can't move and if player is behind something and if we can just switch dirs
-                                    if (!didWalk)
-                                    {
-                                        if (modTypes.MapNpc[y, x].X - 1 == modTypes.GetPlayerX(target) && modTypes.MapNpc[y, x].Y == modTypes.GetPlayerY(target))
-                                        {
-                                            if (modTypes.MapNpc[y, x].Dir != modTypes.DIR_LEFT)
-                                            {
-                                                modGameLogic.NpcDir(y, x, modTypes.DIR_LEFT);
-                                            }
-
-                                            didWalk = true;
-                                        }
-
-                                        if (modTypes.MapNpc[y, x].X + 1 == modTypes.GetPlayerX(target) && modTypes.MapNpc[y, x].Y == modTypes.GetPlayerY(target))
-                                        {
-                                            if (modTypes.MapNpc[y, x].Dir != modTypes.DIR_RIGHT)
-                                            {
-                                                modGameLogic.NpcDir(y, x, modTypes.DIR_RIGHT);
-                                            }
-
-                                            didWalk = true;
-                                        }
-
-                                        if (modTypes.MapNpc[y, x].X == modTypes.GetPlayerX(target) && modTypes.MapNpc[y, x].Y - 1 == modTypes.GetPlayerY(target))
-                                        {
-                                            if (modTypes.MapNpc[y, x].Dir != modTypes.DIR_UP)
-                                            {
-                                                modGameLogic.NpcDir(y, x, modTypes.DIR_UP);
-                                            }
-
-                                            didWalk = true;
-                                        }
-
-                                        if (modTypes.MapNpc[y, x].X == modTypes.GetPlayerX(target) && modTypes.MapNpc[y, x].Y + 1 == modTypes.GetPlayerY(target))
-                                        {
-                                            if (modTypes.MapNpc[y, x].Dir != modTypes.DIR_DOWN)
-                                            {
-                                                modGameLogic.NpcDir(y, x, modTypes.DIR_DOWN);
-                                            }
-
-                                            didWalk = true;
-                                        }
-
-                                        // We could not move so player must be behind something, walk randomly.
-                                        if (!didWalk)
-                                        {
-                                            i = Random.Shared.Next(2);
-                                            if (i == 1)
-                                            {
-                                                i = Random.Shared.Next(4);
-                                                if (modGameLogic.CanNpcMove(y, x, i))
-                                                {
-                                                    modGameLogic.NpcMove(y, x, i, modTypes.MOVING_WALKING);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    modTypes.MapNpc[y, x].Target = 0;
-                                }
-                            }
-                            else
-                            {
-                                i = Random.Shared.Next(4);
-                                if (i == 1)
-                                {
-                                    i = Random.Shared.Next(4);
-                                    if (modGameLogic.CanNpcMove(y, x, i))
-                                    {
-                                        modGameLogic.NpcMove(y, x, i, modTypes.MOVING_WALKING);
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // /////////////////////////////////////////////
-                    // // This is used for npcs to attack players //
-                    // /////////////////////////////////////////////
-                    // Make sure theres a npc with the map
-                    if (modTypes.Map[y].Npc[x] > 0 && modTypes.MapNpc[y, x].Num > 0)
-                    {
-                        var target = modTypes.MapNpc[y, x].Target;
-
-                        // Check if the npc can attack the targeted player player
-                        if (target > 0)
-                        {
-                            // Is the target playing and on the same map?
-                            if (modServerTCP.IsPlaying(target) && modTypes.GetPlayerMap(target) == y)
-                            {
-                                // Can the npc attack the player?
-                                if (modGameLogic.CanNpcAttackPlayer(x, target))
-                                {
-                                    if (!modGameLogic.CanPlayerBlockHit(target))
-                                    {
-                                        var damage = modTypes.Npc[npcNum].STR - modGameLogic.GetPlayerProtection(target);
-                                        if (damage > 0)
-                                        {
-                                            modGameLogic.NpcAttackPlayer(x, target, damage);
-                                        }
-                                        else
-                                        {
-                                            modServerTCP.PlayerMsg(target, $"The {modTypes.Npc[npcNum].Name.Trim()}'s hit didn't even phase you!", modText.BrightBlue);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        modServerTCP.PlayerMsg(target, $"Your {modTypes.Item[modTypes.GetPlayerInvItemNum(target, modTypes.GetPlayerShieldSlot(target))].Name.Trim()} blocks the {modTypes.Npc[npcNum].Name.Trim()}'s hit!", modText.BrightCyan);
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                // Player left map or game, set target to 0
-                                modTypes.MapNpc[y, x].Target = 0;
-                            }
-                        }
-                    }
-
-                    ////////////////////////////////////////////
-                    // This is used for regenerating NPC's HP //
-                    ////////////////////////////////////////////
-                    if (modTypes.MapNpc[y, x].Num > 0 && GetTickCount() > GiveNPCHPTimer + 10000)
-                    {
-                        if (modTypes.MapNpc[y, x].HP > 0)
-                        {
-                            modTypes.MapNpc[y, x].HP += modGameLogic.GetNpcHPRegen(npcNum);
-
-                            // Check if they have more then they should and if so just set it to max
-                            if (modTypes.MapNpc[y, x].HP > modGameLogic.GetNpcMaxHP(npcNum))
-                            {
-                                modTypes.MapNpc[y, x].HP = modGameLogic.GetNpcMaxHP(npcNum);
-                            }
-                        }
-                    }
-
-                    //////////////////////////////////////
-                    // This is used for spawning an NPC //
-                    //////////////////////////////////////
-                    // Check if we are supposed to spawn an npc or not
-                    if (modTypes.MapNpc[y, x].Num == 0 && modTypes.Map[y].Npc[x] > 0)
-                    {
-                        if (tickCount > modTypes.MapNpc[y, x].SpawnWait + (modTypes.Npc[modTypes.Map[y].Npc[x]].SpawnSecs * 1000))
-                        {
-                            modGameLogic.SpawnNpc(x, y);
-                        }
-                    }
+                    mapNpc.HP = modGameLogic.GetNpcMaxHP(npcNum);
                 }
+            }
+        }
+    }
+
+    public static void GameAI()
+    {
+        var tickCount = GetTickCount();
+
+        for (var mapNum = 1; mapNum <= modTypes.MAX_MAPS; mapNum++)
+        {
+            if (modTypes.PlayersOnMap[mapNum] == 0)
+            {
+                continue;
+            }
+
+            CloseDoors(mapNum, tickCount);
+
+            for (var mapNpcNum = 1; mapNpcNum <= modTypes.MAX_MAP_NPCS; mapNpcNum++)
+            {
+                UpdateNpc(mapNum, mapNpcNum, tickCount);
             }
         }
 

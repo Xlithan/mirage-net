@@ -31,9 +31,8 @@ internal static class Program
                 modGeneral.CheckSpawnMapItems();
                 spawnMapItemsTimeLeft += spawnMapItemsInterval;
             }
-
-            Console.WriteLine("AI Tick");
-            modGeneral.GameAI();
+            
+            modGeneral.ServerLogic();
         }
     }
 
